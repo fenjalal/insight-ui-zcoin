@@ -4,17 +4,16 @@
     <div class="container" data-ng-if="!hideSNavbar">
       <div class="col-md-6 col-lg-7 text-left">
           <h3 translate>Transaction</h3>
-          <div class="ellipsis"> 
-            <small>{{tx.txid}}</small> 
+          <div class="ellipsis">
+            <small>{{tx.txid}}</small>
             <span class="btn-copy" clip-copy="tx.txid"></span>
           </div>
       </div>
       <div class="col-md-6 col-lg-5 text-right">
-        <span data-ng-show="tx.confirmations" class="txvalues
-          txvalues-success">{{tx.confirmations}} 
+        <span data-ng-show="tx.confirmations" class="txvalues txvalues-success">{{tx.confirmations}}
           <span translate>Confirmations</span>
         </span>
-        <span data-ng-show="!tx.confirmations" 
+        <span data-ng-show="!tx.confirmations"
           class="txvalues txvalues-danger" translate>Unconfirmed Transaction!</span>
         <span class="txvalues txvalues-primary">{{$root.currency.getConvertion(tx.valueOut) || tx.valueOut + ' FIRO' }}</span>
       </div>
@@ -27,13 +26,7 @@
     </div>
   </div>
   <div data-ng-if="tx.txid">
-    <h1><span translate>Transaction</span> 
-      <small data-ng-show="from_vin || from_vout">
-        <span data-ng-show="from_vin" translate>Input</span> 
-        <span data-ng-show="from_vout" translate>Output</span> 
-        <span>{{v_index}}</span>
-      </small>
-    </h1>
+    <h1><span translate>Transaction</span></h1>
     <div class="progress progress-striped active" data-ng-if="!tx.txid">
       <div class="progress-bar progress-bar-info" style="width: 100%">
         <span translate>Loading Transaction Details</span> <span class="loader-gif"></span>
@@ -41,7 +34,7 @@
     </div>
     <div data-ng-if="tx.txid">
       <div class="well well-sm ellipsis">
-        <strong translate>Transaction</strong> 
+        <strong translate>Transaction</strong>
         <span class="txid text-muted">{{tx.txid}}</span>
         <span class="btn-copy" clip-copy="tx.txid"></span>
       </div>
@@ -68,10 +61,13 @@
         </tr>
         <tr>
           <td><strong translate>Included in Block</strong></td>
-          <td data-ng-show="tx.blockhash" class="text-muted text-right"> 
+          <!-- PRIVACY: blockhash shown as plain text only, no navigation link -->
+          <td data-ng-show="tx.blockhash" class="text-muted text-right">
             <div class="ellipsis">
-              <a href="block/{{tx.blockhash}}">{{tx.blockhash}}</a>
+              <span class="text-muted">{{tx.blockhash}}</span>
+              <span class="btn-copy" clip-copy="tx.blockhash"></span>
             </div>
+          </td>
           <td data-ng-show="!tx.blockhash" class="text-muted text-right">Unconfirmed</td>
         </tr>
         <tr data-ng-show="tx.locktime">
@@ -82,15 +78,15 @@
           <td><strong>Coinbase</strong></td>
           <td class="text-muted text-right">
             <div class="ellipsis">
-                <span class="btn-copy ng-isolate-scope" clip-copy="tx.vin[0].coinbase"></span>
-                <span class="ng-binding">{{tx.vin[0].coinbase}}</span>
+              <span class="btn-copy ng-isolate-scope" clip-copy="tx.vin[0].coinbase"></span>
+              <span class="ng-binding">{{tx.vin[0].coinbase}}</span>
             </div>
           </td>
         </tr>
         </tbody>
       </table>
     </div>
-    <div data-ng-include src="'views/transaction/extrapayload.html'"  data-ng-show="tx.extraPayload"></div>
+    <div data-ng-include src="'views/transaction/extrapayload.html'" data-ng-show="tx.extraPayload"></div>
     <h2 translate>Details</h2>
     <div class="block-tx" data-ng-if="tx.txid">
       <div data-ng-include src="'views/transaction/tx.html'"></div>

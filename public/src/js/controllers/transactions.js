@@ -60,6 +60,8 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
       }
       tmp[addr].isSpent = items[i].spentTxId;
 
+      // PRIVACY: doubleSpentTxID retained in data model for warning display only,
+      // the template no longer renders it as a navigable link.
       tmp[addr].doubleSpentTxID = tmp[addr].doubleSpentTxID   || items[i].doubleSpentTxID;
       tmp[addr].doubleSpentIndex = tmp[addr].doubleSpentIndex || items[i].doubleSpentIndex;
       tmp[addr].dbError = tmp[addr].dbError || items[i].dbError;
@@ -84,6 +86,27 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
   var _processTX = function(tx) {
     tx.vinSimple = _aggregateItems(tx.vin);
     tx.voutSimple = _aggregateItems(tx.vout);
+
+    // PRIVACY: strip spentTxId from all vout entries so it cannot be used
+    // to reconstruct forward transaction chains even via the JSON model.
+    if (tx.vout) {
+      tx.vout.forEach(function(vout) {
+        delete vout.spentTxId;
+        delete vout.spentIndex;
+        delete vout.spentHeight;
+      });
+    }
+    if (tx.voutSimple) {
+      tx.voutSimple.forEach(function(vout) {
+        if (vout.items) {
+          vout.items.forEach(function(item) {
+            delete item.spentTxId;
+            delete item.spentIndex;
+            delete item.spentHeight;
+          });
+        }
+      });
+    }
   };
 
   var _paginate = function(data) {
@@ -93,7 +116,6 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     pageNum += 1;
 
     data.txs.forEach(function(tx) {
-
       _processTX(tx);
       $scope.txs.push(tx);
     });
@@ -165,15 +187,12 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     }
   };
 
-  // Highlighted txout
-  if ($routeParams.v_type == '>' || $routeParams.v_type == '<') {
-    $scope.from_vin = $routeParams.v_type == '<' ? true : false;
-    $scope.from_vout = $routeParams.v_type == '>' ? true : false;
-    $scope.v_index = parseInt($routeParams.v_index);
-    $scope.itemsExpanded = true;
-    $scope.extraPayloadExpanded = false;
-  }
-  
+  // PRIVACY: v_type / v_index route params removed.
+  // These params triggered itemsExpanded=true and from_vin/from_vout modes,
+  // which rendered full vin with outpoint txid links (tx/TXID/>/N)
+  // and full vout with spentTxId links (tx/TXID/</N), enabling hop-by-hop
+  // traversal of transaction graphs. All expanded views are now disabled.
+
   //Init without txs
   $scope.txs = [];
 
@@ -201,7 +220,6 @@ angular.module('insight.transactions').controller('SendRawTransactionController'
     $http.post(window.apiPrefix + '/tx/send', postData)
       .success(function(data, status, headers, config) {
         if(typeof(data.txid) != 'string') {
-          // API returned 200 but the format is not known
           $scope.status = 'error';
           $scope.error = 'The transaction was sent but no transaction id was got back';
           return;
@@ -215,7 +233,7 @@ angular.module('insight.transactions').controller('SendRawTransactionController'
         if(data) {
           $scope.error = data;
         } else {
-          $scope.error = "No error message given (connection error?)"
+          $scope.error = "No error message given (connection error?)";
         }
       });
   };

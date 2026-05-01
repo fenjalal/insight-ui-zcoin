@@ -23,7 +23,7 @@
   </div>
   <div data-ng-if="address.addrStr">
     <div class="well well-sm ellipsis">
-      <strong translate>Address</strong> 
+      <strong translate>Address</strong>
       <span class="text-muted">{{address.addrStr}}</span>
       <span class="btn-copy" clip-copy="address.addrStr"></span>
     </div>
@@ -67,14 +67,16 @@
           <td class="small" translate>No. Transactions</td>
           <td class="address ellipsis text-right">{{address.unconfirmedTxApperances}}</td>
         </tr>
-
         </tbody>
       </table>
     </div>
   </div>
-  <div data-ng-if="address.addrStr" data-ng-controller="transactionsController" data-ng-init="load('address')">
-    <h2 translate>Transactions</h2>
-    <div data-ng-include src="'views/transaction/list.html'" when-scrolled="loadMore()"></div>
+  <!-- PRIVACY: Transaction history list removed.
+       Listing all transactions for an address allows full graph traversal (A→B→C).
+       Balance summary above is retained for wallet verification purposes only. -->
+  <div data-ng-if="address.addrStr" class="alert alert-info" style="margin-top: 1em;">
+    <span class="glyphicon glyphicon-lock"></span>
+    <strong translate> Privacy Mode:</strong>
+    <span translate> Transaction history is not displayed to prevent transaction graph traversal.</span>
   </div>
 </section>
-
