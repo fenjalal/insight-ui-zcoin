@@ -10,19 +10,45 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
   var pagesTotal = 1;
   var COIN = 100000000;
 
+  // Prefixes that identify Spark / Lelantus / Sigma shielded addresses
+  var SHIELDED_PREFIXES = [
+    'Sparks', 'Sparkspend', 'Sparksmint', 'Sparkname', 'spark',
+    'Lelantusjmint', 'Lelantusjsplit', 'Lelantusj',
+    'Sigma', 'Zero'
+  ];
+
+  // Shielded scriptPubKey types
+  var SHIELDED_TYPES = [
+    'lelantusjmint', 'sparksmint', 'sparkname', 'spark',
+    'lelantusjsplit', 'sigmamint'
+  ];
+
+  var _isShieldedAddr = function(addr) {
+    if (!addr) return false;
+    for (var i = 0; i < SHIELDED_PREFIXES.length; i++) {
+      if (addr.startsWith(SHIELDED_PREFIXES[i])) return true;
+    }
+    return false;
+  };
+
+  var _isShieldedType = function(type) {
+    if (!type) return false;
+    return SHIELDED_TYPES.indexOf(type) !== -1;
+  };
+
   var _aggregateItems = function(items) {
     if (!items) return [];
 
     var l = items.length;
-
     var ret = [];
     var tmp = {};
     var u = 0;
 
-    for(var i=0; i < l; i++) {
+    for (var i = 0; i < l; i++) {
 
       var notAddr = false;
       var isSigma = false;
+
       // non standard input
       if (items[i].scriptSig && !items[i].addr) {
         items[i].addr = 'Unparsed address [' + u++ + ']';
@@ -45,6 +71,9 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
       // multiple addr at output
       if (items[i].scriptPubKey && items[i].scriptPubKey.addresses.length > 1) {
         items[i].addr = items[i].scriptPubKey.addresses.join(',');
+        // tag shielded flag on multi-addr outputs
+        items[i].isShielded = _isShieldedAddr(items[i].addr) ||
+                              _isShieldedType(items[i].scriptPubKey && items[i].scriptPubKey.type);
         ret.push(items[i]);
         continue;
       }
@@ -57,18 +86,26 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
         tmp[addr].count = 0;
         tmp[addr].addr = addr;
         tmp[addr].items = [];
+        // Determine shielded status once per aggregated address bucket
+        tmp[addr].isShielded = _isShieldedAddr(addr) ||
+                               _isShieldedType(items[i].scriptPubKey && items[i].scriptPubKey.type);
       }
-      tmp[addr].isSpent = items[i].spentTxId;
 
-      // PRIVACY: doubleSpentTxID retained in data model for warning display only,
-      // the template no longer renders it as a navigable link.
-      tmp[addr].doubleSpentTxID = tmp[addr].doubleSpentTxID   || items[i].doubleSpentTxID;
-      tmp[addr].doubleSpentIndex = tmp[addr].doubleSpentIndex || items[i].doubleSpentIndex;
-      tmp[addr].dbError = tmp[addr].dbError || items[i].dbError;
-      tmp[addr].valueSat += Math.round(items[i].value * COIN);
+      tmp[addr].isSpent = items[i].spentTxId;
+      // For shielded outputs: strip spentTxId so it can never leak forward links
+      if (tmp[addr].isShielded) {
+        delete items[i].spentTxId;
+        delete items[i].spentIndex;
+        delete items[i].spentHeight;
+      }
+
+      tmp[addr].doubleSpentTxID   = tmp[addr].doubleSpentTxID   || items[i].doubleSpentTxID;
+      tmp[addr].doubleSpentIndex  = tmp[addr].doubleSpentIndex  || items[i].doubleSpentIndex;
+      tmp[addr].dbError           = tmp[addr].dbError           || items[i].dbError;
+      tmp[addr].valueSat         += Math.round(items[i].value * COIN);
       tmp[addr].items.push(items[i]);
-      tmp[addr].notAddr = notAddr;
-      tmp[addr].isSigma = isSigma;
+      tmp[addr].notAddr           = notAddr;
+      tmp[addr].isSigma           = isSigma;
 
       if (items[i].unconfirmedInput)
         tmp[addr].unconfirmedInput = true;
@@ -77,33 +114,26 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     }
 
     angular.forEach(tmp, function(v) {
-      v.value    = v.value || parseInt(v.valueSat) / COIN;
+      v.value = v.value || parseInt(v.valueSat) / COIN;
       ret.push(v);
     });
     return ret;
   };
 
   var _processTX = function(tx) {
-    tx.vinSimple = _aggregateItems(tx.vin);
+    tx.vinSimple  = _aggregateItems(tx.vin);
     tx.voutSimple = _aggregateItems(tx.vout);
 
-    // PRIVACY: strip spentTxId from all vout entries so it cannot be used
-    // to reconstruct forward transaction chains even via the JSON model.
+    // Extra pass: strip spentTxId from raw vout entries for shielded outputs
+    // so the full expanded view cannot use them either
     if (tx.vout) {
       tx.vout.forEach(function(vout) {
-        delete vout.spentTxId;
-        delete vout.spentIndex;
-        delete vout.spentHeight;
-      });
-    }
-    if (tx.voutSimple) {
-      tx.voutSimple.forEach(function(vout) {
-        if (vout.items) {
-          vout.items.forEach(function(item) {
-            delete item.spentTxId;
-            delete item.spentIndex;
-            delete item.spentHeight;
-          });
+        var type = vout.scriptPubKey && vout.scriptPubKey.type;
+        var addr = vout.scriptPubKey && vout.scriptPubKey.addresses && vout.scriptPubKey.addresses[0];
+        if (_isShieldedType(type) || _isShieldedAddr(addr)) {
+          delete vout.spentTxId;
+          delete vout.spentIndex;
+          delete vout.spentHeight;
         }
       });
     }
@@ -111,10 +141,8 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
 
   var _paginate = function(data) {
     $scope.loading = false;
-
     pagesTotal = data.pagesTotal;
     pageNum += 1;
-
     data.txs.forEach(function(tx) {
       _processTX(tx);
       $scope.txs.push(tx);
@@ -130,7 +158,7 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     });
   };
 
-  var _byAddress = function () {
+  var _byAddress = function() {
     TransactionsByAddress.get({
       address: $routeParams.addrStr,
       pageNum: pageNum
@@ -143,7 +171,7 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     Transaction.get({
       txId: txid
     }, function(tx) {
-      $rootScope.titleDetail = tx.txid.substring(0,7) + '...';
+      $rootScope.titleDetail = tx.txid.substring(0, 7) + '...';
       $rootScope.flashMessage = null;
       $scope.tx = tx;
       _processTX(tx);
@@ -151,14 +179,11 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     }, function(e) {
       if (e.status === 400) {
         $rootScope.flashMessage = 'Invalid Transaction ID: ' + $routeParams.txId;
-      }
-      else if (e.status === 503) {
+      } else if (e.status === 503) {
         $rootScope.flashMessage = 'Backend Error. ' + e.data;
-      }
-      else {
+      } else {
         $rootScope.flashMessage = 'Transaction Not Found';
       }
-
       $location.path('/');
     });
   };
@@ -167,33 +192,35 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
     _findTx($routeParams.txId);
   };
 
-  //Initial load
+  // Initial load
   $scope.load = function(from) {
     $scope.loadedBy = from;
     $scope.loadMore();
   };
 
-  //Load more transactions for pagination
+  // Load more transactions for pagination
   $scope.loadMore = function() {
     if (pageNum < pagesTotal && !$scope.loading) {
       $scope.loading = true;
-
       if ($scope.loadedBy === 'address') {
         _byAddress();
-      }
-      else {
+      } else {
         _byBlock();
       }
     }
   };
 
-  // PRIVACY: v_type / v_index route params removed.
-  // These params triggered itemsExpanded=true and from_vin/from_vout modes,
-  // which rendered full vin with outpoint txid links (tx/TXID/>/N)
-  // and full vout with spentTxId links (tx/TXID/</N), enabling hop-by-hop
-  // traversal of transaction graphs. All expanded views are now disabled.
+  // Highlighted txout — kept intact for T-address traversal
+  // Shielded inputs/outputs will still render as "Hidden" labels via isShielded flag
+  if ($routeParams.v_type == '>' || $routeParams.v_type == '<') {
+    $scope.from_vin  = $routeParams.v_type == '<' ? true : false;
+    $scope.from_vout = $routeParams.v_type == '>' ? true : false;
+    $scope.v_index   = parseInt($routeParams.v_index);
+    $scope.itemsExpanded = true;
+    $scope.extraPayloadExpanded = false;
+  }
 
-  //Init without txs
+  // Init without txs
   $scope.txs = [];
 
   $scope.$on('tx', function(event, txid) {
@@ -204,37 +231,32 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
 
 angular.module('insight.transactions').controller('SendRawTransactionController',
   function($scope, $http) {
-  $scope.transaction = '';
-  $scope.status = 'ready';  // ready|loading|sent|error
-  $scope.txid = '';
-  $scope.error = null;
+    $scope.transaction = '';
+    $scope.status = 'ready'; // ready|loading|sent|error
+    $scope.txid = '';
+    $scope.error = null;
 
-  $scope.formValid = function() {
-    return !!$scope.transaction;
-  };
-  $scope.send = function() {
-    var postData = {
-      rawtx: $scope.transaction
+    $scope.formValid = function() {
+      return !!$scope.transaction;
     };
-    $scope.status = 'loading';
-    $http.post(window.apiPrefix + '/tx/send', postData)
-      .success(function(data, status, headers, config) {
-        if(typeof(data.txid) != 'string') {
-          $scope.status = 'error';
-          $scope.error = 'The transaction was sent but no transaction id was got back';
-          return;
-        }
 
-        $scope.status = 'sent';
-        $scope.txid = data.txid;
-      })
-      .error(function(data, status, headers, config) {
-        $scope.status = 'error';
-        if(data) {
-          $scope.error = data;
-        } else {
-          $scope.error = "No error message given (connection error?)";
-        }
-      });
-  };
-});
+    $scope.send = function() {
+      var postData = { rawtx: $scope.transaction };
+      $scope.status = 'loading';
+      $http.post(window.apiPrefix + '/tx/send', postData)
+        .success(function(data) {
+          if (typeof(data.txid) != 'string') {
+            $scope.status = 'error';
+            $scope.error = 'The transaction was sent but no transaction id was got back';
+            return;
+          }
+          $scope.status = 'sent';
+          $scope.txid = data.txid;
+        })
+        .error(function(data) {
+          $scope.status = 'error';
+          $scope.error = data || 'No error message given (connection error?)';
+        });
+    };
+  }
+);

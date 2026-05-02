@@ -17,16 +17,32 @@
       </a>
     </div>
   </div>
+
   <h1><span translate>Address</span> <small data-ng-show="address.addrStr">{{$root.currency.getConvertion(address.balance) || address.balance + ' FIRO'}}</small></h1>
+
   <div class="text-muted" data-ng-if="!address.addrStr">
     <span translate>Loading Address Information</span> <span class="loader-gif"></span>
   </div>
+
   <div data-ng-if="address.addrStr">
     <div class="well well-sm ellipsis">
       <strong translate>Address</strong>
       <span class="text-muted">{{address.addrStr}}</span>
       <span class="btn-copy" clip-copy="address.addrStr"></span>
     </div>
+
+    <!-- Detect shielded address types: Spark / Lelantus / Sigma prefixes -->
+    <div data-ng-init="
+      isShieldedAddress = (
+        address.addrStr.startsWith('Sparks') ||
+        address.addrStr.startsWith('spark')  ||
+        address.addrStr.startsWith('Lelantus') ||
+        address.addrStr.startsWith('Sigma') ||
+        address.addrStr.startsWith('Zero')
+      )
+    "></div>
+
+    <!-- Summary table shown for ALL address types -->
     <h2 translate>Summary <small>confirmed</small></h2>
     <div class="row" data-ng-hide="!address.addrStr">
       <div class="col-md-10">
@@ -55,6 +71,7 @@
         <qrcode size="160" data="{{address.addrStr}}"></qrcode>
       </div>
     </div>
+
     <div data-ng-show="address.unconfirmedTxApperances">
       <h3 translate>Unconfirmed</h3>
       <table class="table">
@@ -71,12 +88,20 @@
       </table>
     </div>
   </div>
-  <!-- PRIVACY: Transaction history list removed.
-       Listing all transactions for an address allows full graph traversal (A→B→C).
-       Balance summary above is retained for wallet verification purposes only. -->
-  <div data-ng-if="address.addrStr" class="alert alert-info" style="margin-top: 1em;">
-    <span class="glyphicon glyphicon-lock"></span>
-    <strong translate> Privacy Mode:</strong>
-    <span translate> Transaction history is not displayed to prevent transaction graph traversal.</span>
+
+  <!-- T-address: show full transaction history with graph traversal -->
+  <div data-ng-if="address.addrStr && !isShieldedAddress" data-ng-controller="transactionsController" data-ng-init="load('address')">
+    <h2 translate>Transactions</h2>
+    <div data-ng-include src="'views/transaction/list.html'" when-scrolled="loadMore()"></div>
   </div>
+
+  <!-- Spark / Shielded address: block transaction history entirely -->
+  <div data-ng-if="address.addrStr && isShieldedAddress" style="margin-top: 1.5em;">
+    <div class="alert alert-info">
+      <span class="glyphicon glyphicon-lock" style="margin-right:6px;"></span>
+      <strong translate>Shielded Address</strong> —
+      <span translate>Transaction history is not available for Spark / shielded addresses.</span>
+    </div>
+  </div>
+
 </section>
