@@ -51,16 +51,26 @@ function($scope, $rootScope, $routeParams, $location, Global, Transaction, Trans
 
       // non standard input
       if (items[i].scriptSig && !items[i].addr) {
-        items[i].addr = 'Unparsed address [' + u++ + ']';
+        items[i].addr = 'Shielded';
         items[i].notAddr = true;
         notAddr = true;
       }
 
-      // non standard output
+     // non standard output
       if (items[i].scriptPubKey && !items[i].scriptPubKey.addresses) {
-        items[i].scriptPubKey.addresses = ['Unparsed address [' + u++ + ']'];
-        items[i].notAddr = true;
-        notAddr = true;
+          var stype = items[i].scriptPubKey.type || '';
+          var label;
+          if (stype.indexOf('spend') !== -1) {
+              label = 'Shielded Spend';
+          } else if (stype.indexOf('mint') !== -1) {
+              label = 'Shielded Mint';
+          } else {
+              label = 'Shielded (Private)';
+          }
+          items[i].scriptPubKey.addresses = [label];
+          items[i].notAddr = true;
+          items[i].isShielded = true;
+          notAddr = true;
       }
 
       if (items[i].addr && (items[i].addr.startsWith('Sigma') || items[i].addr.startsWith('Zero'))) {
